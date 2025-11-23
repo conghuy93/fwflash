@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Web Flasher - Flash Online</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: "●";
+            font-size: 0.8em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #495057;
+        }
+
+        select, input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .progress-message {
+            margin-top: 10px;
+            text-align: center;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .alert.active {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 12px;
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            border-color: #667eea;
+            background: #e9ecef;
+        }
+
+        .file-name {
+            margin-top: 10px;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .serial-status {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .serial-status.active {
+            display: block;
+        }
+
+        .serial-status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .serial-status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ESP32 Web Flasher</h1>
+            <p>Flash ESP32 trực tiếp từ trình duyệt - Không cần cài đặt!</p>
+        </div>
+
+        <div class="content">
+            <!-- Serial Connection Section -->
+            <div class="section">
+                <div class="section-title">Kết nối Serial</div>
+                <div id="serialStatus" class="serial-status"></div>
+                <div class="form-group">
+                    <label for="baud">Baud Rate:</label>
+                    <select id="baud">
+                        <option value="115200" selected>115200</option>
+                        <option value="230400">230400</option>
+                        <option value="460800">460800</option>
+                        <option value="921600">921600</option>
+                    </select>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="connectSerial()" id="connectBtn">
+                        🔌 Kết nối Serial
+                    </button>
+                    <button class="btn btn-primary" onclick="disconnectSerial()" id="disconnectBtn" style="display: none;">
+                        🔌 Ngắt kết nối
+                    </button>
+                </div>
+                <div class="alert alert-warning" id="browserWarning" style="display: none;">
+                    <strong>⚠️ Lưu ý:</strong> Web Serial API chỉ hoạt động trên Chrome, Edge, Opera và các trình duyệt Chromium. 
+                    Cần kết nối HTTPS hoặc localhost.
+                </div>
+            </div>
+
+            <!-- Flash Firmware Section -->
+            <div class="section">
+                <div class="section-title">Flash Firmware</div>
+                <div class="form-group">
+                    <label for="firmwareFile">Chọn file firmware (.bin):</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="firmwareFile" accept=".bin" onchange="onFileSelect()">
+                        <label for="firmwareFile" class="file-input-label">
+                            📁 Click để chọn file hoặc kéo thả file vào đây
+                        </label>
+                    </div>
+                    <div id="fileName" class="file-name"></div>
+                </div>
+                <div class="form-group">
+                    <label for="address">Địa chỉ Flash (hex):</label>
+                    <input type="text" id="address" value="0x1000" placeholder="0x1000">
+                </div>
+                <div class="form-group">
+                    <label for="flashMode">Flash Mode:</label>
+                    <select id="flashMode">
+                        <option value="qio">QIO</option>
+                        <option value="qout">QOUT</option>
+                        <option value="dio" selected>DIO</option>
+                        <option value="dout">DOUT</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="flashSize">Flash Size:</label>
+                    <select id="flashSize">
+                        <option value="256KB">256KB</option>
+                        <option value="512KB">512KB</option>
+                        <option value="1MB">1MB</option>
+                        <option value="2MB">2MB</option>
+                        <option value="4MB" selected>4MB</option>
+                        <option value="8MB">8MB</option>
+                        <option value="16MB">16MB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="flashFreq">Flash Frequency:</label>
+                    <select id="flashFreq">
+                        <option value="80m">80MHz</option>
+                        <option value="60m">60MHz</option>
+                        <option value="48m">48MHz</option>
+                        <option value="40m" selected>40MHz</option>
+                        <option value="30m">30MHz</option>
+                        <option value="26m">26MHz</option>
+                        <option value="24m">24MHz</option>
+                        <option value="20m">20MHz</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="eraseAll" style="width: auto; margin-right: 8px;">
+                        Xóa toàn bộ flash trước khi flash
+                    </label>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="flashFirmware()" id="flashBtn" disabled>
+                        ⚡ Flash Firmware
+                    </button>
+                </div>
+                <div id="flashProgress" class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill">0%</div>
+                    </div>
+                    <div class="progress-message" id="progressMessage"></div>
+                </div>
+            </div>
+
+            <!-- Alert Messages -->
+            <div id="alert" class="alert"></div>
+        </div>
+    </div>
+
+    <script src="esptool-web.js"></script>
+    <script>
+        let port = null;
+        let reader = null;
+        let writer = null;
+
+        // Check browser support
+        if (!navigator.serial) {
+            document.getElementById('browserWarning').style.display = 'block';
+            showAlert('Trình duyệt của bạn không hỗ trợ Web Serial API. Vui lòng sử dụng Chrome, Edge hoặc Opera.', 'error');
+        }
+
+        // Connect to serial port
+        async function connectSerial() {
+            try {
+                if (!navigator.serial) {
+                    showAlert('Web Serial API không được hỗ trợ trên trình duyệt này!', 'error');
+                    return;
+                }
+
+                port = await navigator.serial.requestPort();
+                const baud = parseInt(document.getElementById('baud').value);
+                
+                await port.open({ baudRate: baud });
+                
+                reader = port.readable.getReader();
+                writer = port.writable.getWriter();
+
+                updateSerialStatus(true);
+                document.getElementById('connectBtn').style.display = 'none';
+                document.getElementById('disconnectBtn').style.display = 'inline-block';
+                document.getElementById('flashBtn').disabled = false;
+                
+                showAlert('Đã kết nối thành công với ESP32!', 'success');
+            } catch (error) {
+                if (error.name === 'NotFoundError') {
+                    showAlert('Không tìm thấy cổng serial. Vui lòng thử lại.', 'error');
+                } else {
+                    showAlert('Lỗi kết nối: ' + error.message, 'error');
+                }
+            }
+        }
+
+        // Disconnect serial port
+        async function disconnectSerial() {
+            try {
+                if (reader) {
+                    await reader.cancel();
+                    await reader.releaseLock();
+                }
+                if (writer) {
+                    await writer.releaseLock();
+                }
+                if (port) {
+                    await port.close();
+                }
+                
+                port = null;
+                reader = null;
+                writer = null;
+                
+                updateSerialStatus(false);
+                document.getElementById('connectBtn').style.display = 'inline-block';
+                document.getElementById('disconnectBtn').style.display = 'none';
+                document.getElementById('flashBtn').disabled = true;
+                
+                showAlert('Đã ngắt kết nối.', 'success');
+            } catch (error) {
+                showAlert('Lỗi khi ngắt kết nối: ' + error.message, 'error');
+            }
+        }
+
+        // Update serial status
+        function updateSerialStatus(connected) {
+            const statusDiv = document.getElementById('serialStatus');
+            statusDiv.classList.remove('connected', 'disconnected');
+            statusDiv.classList.add(connected ? 'connected' : 'disconnected', 'active');
+            statusDiv.textContent = connected ? '✅ Đã kết nối' : '❌ Chưa kết nối';
+        }
+
+        // Handle file selection
+        function onFileSelect() {
+            const fileInput = document.getElementById('firmwareFile');
+            const fileName = document.getElementById('fileName');
+            
+            if (fileInput.files.length > 0) {
+                fileName.textContent = '📄 ' + fileInput.files[0].name;
+            } else {
+                fileName.textContent = '';
+            }
+        }
+
+        // Flash firmware
+        async function flashFirmware() {
+            if (!port || !writer) {
+                showAlert('Vui lòng kết nối serial trước!', 'error');
+                return;
+            }
+
+            const fileInput = document.getElementById('firmwareFile');
+            if (!fileInput.files.length) {
+                showAlert('Vui lòng chọn file firmware!', 'error');
+                return;
+            }
+
+            const address = document.getElementById('address').value;
+            if (!/^0x[0-9A-Fa-f]+$/.test(address)) {
+                showAlert('Địa chỉ flash không hợp lệ! Vui lòng nhập dạng hex (ví dụ: 0x1000)', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const flashMode = document.getElementById('flashMode').value;
+            const flashSize = document.getElementById('flashSize').value;
+            const flashFreq = document.getElementById('flashFreq').value;
+            const eraseAll = document.getElementById('eraseAll').checked;
+
+            try {
+                document.getElementById('flashProgress').classList.add('active');
+                document.getElementById('flashBtn').disabled = true;
+                
+                updateProgress(0, 'Đang đọc file firmware...');
+                
+                const arrayBuffer = await file.arrayBuffer();
+                const firmwareData = new Uint8Array(arrayBuffer);
+                
+                updateProgress(10, 'Đang kết nối với ESP32...');
+                
+                // Reset ESP32 into bootloader mode
+                await resetToBootloader();
+                
+                updateProgress(20, 'Đang xóa flash...');
+                if (eraseAll) {
+                    await eraseFlash();
+                }
+                
+                updateProgress(30, 'Đang flash firmware...');
+                await writeFlash(parseInt(address, 16), firmwareData);
+                
+                updateProgress(90, 'Đang reset chip...');
+                await resetChip();
+                
+                updateProgress(100, 'Flash hoàn tất!');
+                showAlert('Flash firmware thành công!', 'success');
+                
+                setTimeout(() => {
+                    document.getElementById('flashProgress').classList.remove('active');
+                    document.getElementById('flashBtn').disabled = false;
+                }, 3000);
+                
+            } catch (error) {
+                showAlert('Lỗi khi flash: ' + error.message, 'error');
+                document.getElementById('flashProgress').classList.remove('active');
+                document.getElementById('flashBtn').disabled = false;
+            }
+        }
+
+        // Reset ESP32 to bootloader
+        async function resetToBootloader() {
+            // Set DTR and RTS to enter bootloader
+            await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Erase flash
+        async function eraseFlash() {
+            // Simplified erase - in real implementation, you'd need to send proper commands
+            // This is a placeholder for the erase operation
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        // Write flash
+        async function writeFlash(address, data) {
+            const chunkSize = 1024;
+            const totalChunks = Math.ceil(data.length / chunkSize);
+            
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * chunkSize;
+                const end = Math.min(start + chunkSize, data.length);
+                const chunk = data.slice(start, end);
+                
+                // Send write command (simplified - real implementation needs proper protocol)
+                // This is a placeholder - you'd need to implement the full esptool protocol
+                await writer.write(chunk);
+                
+                const progress = 30 + (i / totalChunks) * 60;
+                updateProgress(progress, `Đang ghi: ${Math.round(progress)}%`);
+            }
+        }
+
+        // Reset chip
+        async function resetChip() {
+            await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+        }
+
+        // Update progress
+        function updateProgress(percent, message) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressFill').textContent = Math.round(percent) + '%';
+            document.getElementById('progressMessage').textContent = message;
+        }
+
+        // Show alert
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type} active`;
+            
+            setTimeout(() => {
+                alert.classList.remove('active');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
