@@ -640,47 +640,8 @@
                         throw e;
                     }
                 }
-                
-                // Get reader - check if stream is locked first
-                if (port.readable) {
-                    if (port.readable.locked) {
-                        addTerminalLine('⚠️ Readable stream đã bị lock, đang release...', 'warning');
-                        // Try to get existing reader and release it
-                        try {
-                            const existingReader = port.readable.getReader();
-                            await existingReader.cancel();
-                            await existingReader.releaseLock();
-                        } catch (e) {
-                            console.log('Error releasing existing reader:', e);
-                        }
-                    }
-                    if (!port.readable.locked) {
-                        reader = port.readable.getReader();
-                    } else {
-                        throw new Error('Không thể lấy reader: stream vẫn bị lock');
-                    }
-                }
-                
-                // Get writer - check if stream is locked first
-                if (port.writable) {
-                    if (port.writable.locked) {
-                        addTerminalLine('⚠️ Writable stream đã bị lock, đang release...', 'warning');
-                        // Try to release existing writer
-                        try {
-                            const existingWriter = port.writable.getWriter();
-                            await existingWriter.releaseLock();
-                        } catch (e) {
-                            console.log('Error releasing existing writer:', e);
-                        }
-                    }
-                    if (!port.writable.locked) {
-                        writer = port.writable.getWriter();
-                    } else {
-                        throw new Error('Không thể lấy writer: stream vẫn bị lock');
-                    }
-                }
 
-                // Try to use esptool-js
+                // Try to use esptool-js wrapper FIRST (it will manage readers/writers)
                 if (typeof ESPToolWrapper !== 'undefined') {
                     addTerminalLine('Đang khởi tạo ESPTool wrapper...', 'info');
                     espWrapper = new ESPToolWrapper(port, baud);
@@ -688,6 +649,14 @@
                     const connected = await espWrapper.connect((message) => {
                         addTerminalLine(message, 'info');
                     });
+                    
+                    // Get reader/writer from wrapper after it's initialized
+                    if (espWrapper.reader) {
+                        reader = espWrapper.reader;
+                    }
+                    if (espWrapper.writer) {
+                        writer = espWrapper.writer;
+                    }
                     
                     if (connected) {
                         const chipInfo = espWrapper.getChipInfo();
@@ -699,8 +668,23 @@
                         }
                     } else {
                         addTerminalLine('⚠️ Kết nối cơ bản (esptool-js chưa sẵn sàng)', 'warning');
+                        // If wrapper didn't get reader/writer, get them ourselves
+                        if (!reader && port.readable && !port.readable.locked) {
+                            reader = port.readable.getReader();
+                        }
+                        if (!writer && port.writable && !port.writable.locked) {
+                            writer = port.writable.getWriter();
+                        }
                     }
                 } else {
+                    // No wrapper available, get reader/writer ourselves
+                    addTerminalLine('⚠️ ESPToolWrapper không khả dụng, sử dụng Web Serial trực tiếp', 'warning');
+                    if (port.readable && !port.readable.locked) {
+                        reader = port.readable.getReader();
+                    }
+                    if (port.writable && !port.writable.locked) {
+                        writer = port.writable.getWriter();
+                    }
                     addTerminalLine('✅ Đã kết nối serial port', 'success');
                 }
 
