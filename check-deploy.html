@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiểm tra Deployment</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .check-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #ddd;
+        }
+        .check-item.success {
+            border-left-color: #28a745;
+        }
+        .check-item.error {
+            border-left-color: #dc3545;
+        }
+        .check-item.warning {
+            border-left-color: #ffc107;
+        }
+        h1 { color: #333; }
+        .status { font-weight: bold; }
+        .url { color: #007bff; text-decoration: none; }
+        .url:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Kiểm tra Deployment GitHub Pages</h1>
+    
+    <div class="check-item" id="check1">
+        <div class="status">1. Kiểm tra file index.html</div>
+        <div id="result1">Đang kiểm tra...</div>
+    </div>
+    
+    <div class="check-item" id="check2">
+        <div class="status">2. Kiểm tra file esptool-wrapper.js</div>
+        <div id="result2">Đang kiểm tra...</div>
+    </div>
+    
+    <div class="check-item" id="check3">
+        <div class="status">3. Kiểm tra esptool-js CDN</div>
+        <div id="result3">Đang kiểm tra...</div>
+    </div>
+    
+    <div class="check-item" id="check4">
+        <div class="status">4. Kiểm tra GitHub Pages URL</div>
+        <div id="result4">
+            <a href="https://conghuy93.github.io/fwflash/" target="_blank" class="url">
+                https://conghuy93.github.io/fwflash/
+            </a>
+        </div>
+    </div>
+    
+    <div class="check-item" id="check5">
+        <div class="status">5. Hướng dẫn cấu hình</div>
+        <div>
+            <p><strong>Nếu chưa deploy, làm theo:</strong></p>
+            <ol>
+                <li>Vào: <a href="https://github.com/conghuy93/fwflash/settings/pages" target="_blank" class="url">Settings > Pages</a></li>
+                <li>Source: Chọn <strong>"Deploy from a branch"</strong></li>
+                <li>Branch: <strong>main</strong></li>
+                <li>Folder: <strong>/docs</strong></li>
+                <li>Click <strong>Save</strong></li>
+                <li>Đợi 5-10 phút</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Check 1: index.html
+        fetch('index.html')
+            .then(r => {
+                const check1 = document.getElementById('check1');
+                const result1 = document.getElementById('result1');
+                if (r.ok) {
+                    check1.classList.add('success');
+                    result1.innerHTML = '✅ File index.html có sẵn';
+                } else {
+                    check1.classList.add('error');
+                    result1.innerHTML = '❌ File index.html không tìm thấy';
+                }
+            })
+            .catch(e => {
+                document.getElementById('check1').classList.add('error');
+                document.getElementById('result1').innerHTML = '❌ Lỗi: ' + e.message;
+            });
+
+        // Check 2: esptool-wrapper.js
+        fetch('esptool-wrapper.js')
+            .then(r => {
+                const check2 = document.getElementById('check2');
+                const result2 = document.getElementById('result2');
+                if (r.ok) {
+                    check2.classList.add('success');
+                    result2.innerHTML = '✅ File esptool-wrapper.js có sẵn';
+                } else {
+                    check2.classList.add('error');
+                    result2.innerHTML = '❌ File esptool-wrapper.js không tìm thấy';
+                }
+            })
+            .catch(e => {
+                document.getElementById('check2').classList.add('error');
+                document.getElementById('result2').innerHTML = '❌ Lỗi: ' + e.message;
+            });
+
+        // Check 3: esptool-js CDN
+        fetch('https://unpkg.com/esptool-js@1.0.0/dist/esptool.js', { method: 'HEAD' })
+            .then(r => {
+                const check3 = document.getElementById('check3');
+                const result3 = document.getElementById('result3');
+                if (r.ok) {
+                    check3.classList.add('success');
+                    result3.innerHTML = '✅ CDN esptool-js hoạt động';
+                } else {
+                    check3.classList.add('warning');
+                    result3.innerHTML = '⚠️ CDN có thể có vấn đề';
+                }
+            })
+            .catch(e => {
+                document.getElementById('check3').classList.add('warning');
+                document.getElementById('result3').innerHTML = '⚠️ Không thể kiểm tra CDN (có thể do CORS)';
+            });
+    </script>
+</body>
+</html>
+
