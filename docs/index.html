@@ -807,34 +807,46 @@
                 let lastTime = Date.now();
                 
                 // Use wrapper to call esptool-js writeFlash method
-                await espWrapper.flashFirmware(flashAddress, firmwareData, flashParams, (bytesWritten, totalBytes) => {
-                    const progress = (bytesWritten / totalBytes) * 100;
-                    const progressPercent = 30 + (progress * 0.65);
-                    updateProgress(progressPercent, `Đang ghi: ${Math.round(progress)}%`);
-                    
-                    // Calculate speed
-                    const now = Date.now();
-                    const timeDiff = (now - lastTime) / 1000; // seconds
-                    const bytesDiff = bytesWritten - lastBytesWritten;
-                    const speed = timeDiff > 0 ? (bytesDiff / timeDiff / 1024).toFixed(2) + ' KB/s' : '';
-                    
-                    // Update monitor every 5% or every 50KB or every 2 seconds
-                    if (progress - lastProgress >= 5 || bytesDiff >= 51200 || timeDiff >= 2) {
-                        addMonitorLine(
-                            `📊 Đã ghi: ${(bytesWritten / 1024).toFixed(2)} KB / ${(totalBytes / 1024).toFixed(2)} KB (${Math.round(progress)}%) ${speed}`,
-                            'info'
-                        );
-                        lastProgress = progress;
-                        lastBytesWritten = bytesWritten;
-                        lastTime = now;
-                    }
-                });
+                if (espWrapper) {
+                    await espWrapper.flashFirmware(flashAddress, firmwareData, flashParams, (bytesWritten, totalBytes) => {
+                        const progress = (bytesWritten / totalBytes) * 100;
+                        const progressPercent = 30 + (progress * 0.65);
+                        updateProgress(progressPercent, `Đang ghi: ${Math.round(progress)}%`);
+                        
+                        // Calculate speed
+                        const now = Date.now();
+                        const timeDiff = (now - lastTime) / 1000; // seconds
+                        const bytesDiff = bytesWritten - lastBytesWritten;
+                        const speed = timeDiff > 0 ? (bytesDiff / timeDiff / 1024).toFixed(2) + ' KB/s' : '';
+                        
+                        // Update monitor every 5% or every 50KB or every 2 seconds
+                        if (progress - lastProgress >= 5 || bytesDiff >= 51200 || timeDiff >= 2) {
+                            addMonitorLine(
+                                `📊 Đã ghi: ${(bytesWritten / 1024).toFixed(2)} KB / ${(totalBytes / 1024).toFixed(2)} KB (${Math.round(progress)}%) ${speed}`,
+                                'info'
+                            );
+                            lastProgress = progress;
+                            lastBytesWritten = bytesWritten;
+                            lastTime = now;
+                        }
+                    });
+                } else {
+                    addMonitorLine('❌ Lỗi: esptool-js không khả dụng. Vui lòng tải lại trang.', 'error');
+                    throw new Error('esptool-js không khả dụng. Vui lòng tải lại trang.');
+                }
                 
                 updateProgress(95, 'Đang hoàn tất...');
                 addMonitorLine('✅ Flash hoàn tất, đang reset chip...', 'info');
                 
-                // Reset chip using esptool-js
-                await espWrapper.reset();
+                // Reset chip
+                if (espWrapper) {
+                    await espWrapper.reset();
+                } else {
+                    // Fallback reset
+                    await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+                }
                 
                 updateProgress(100, 'Flash hoàn tất!');
                 addMonitorLine('═══════════════════════════════════════', 'success');
