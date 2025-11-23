@@ -568,6 +568,35 @@
                     return;
                 }
 
+                // Close existing connection if any
+                if (port) {
+                    try {
+                        if (reader) {
+                            await reader.cancel();
+                            await reader.releaseLock();
+                            reader = null;
+                        }
+                        if (writer) {
+                            await writer.releaseLock();
+                            writer = null;
+                        }
+                        if (port.readable || port.writable) {
+                            await port.close();
+                        }
+                    } catch (e) {
+                        console.log('Error closing existing port:', e);
+                    }
+                    port = null;
+                }
+                if (espWrapper) {
+                    try {
+                        await espWrapper.disconnect();
+                    } catch (e) {
+                        console.log('Error disconnecting wrapper:', e);
+                    }
+                    espWrapper = null;
+                }
+
                 // Request port (this will show browser's port selection dialog)
                 addMonitorLine('Đang yêu cầu chọn cổng serial...', 'info');
                 port = await navigator.serial.requestPort();
@@ -575,10 +604,24 @@
                 const baud = parseInt(document.getElementById('baud').value);
                 addMonitorLine(`Đang mở cổng với baud rate ${baud}...`, 'info');
                 
-                await port.open({ baudRate: baud });
+                // Open port
+                try {
+                    await port.open({ baudRate: baud });
+                } catch (e) {
+                    if (e.message.includes('already open')) {
+                        addMonitorLine('Cổng đã mở, tiếp tục...', 'info');
+                    } else {
+                        throw e;
+                    }
+                }
                 
-                reader = port.readable.getReader();
-                writer = port.writable.getWriter();
+                // Get readers/writers
+                if (!reader && port.readable) {
+                    reader = port.readable.getReader();
+                }
+                if (!writer && port.writable) {
+                    writer = port.writable.getWriter();
+                }
 
                 // Try to use esptool-js if available, otherwise use direct serial
                 if (typeof ESPToolWrapper !== 'undefined') {
