@@ -22,45 +22,46 @@ class ESPToolWrapper {
             if (onLog) onLog('Port already open, reusing...');
         }
         
-        // Get reader - check if stream is locked first
+        // Get reader - ONLY if stream is NOT locked and we don't have one
         if (this.port.readable) {
             if (this.port.readable.locked) {
-                if (onLog) onLog('Warning: Readable stream locked, releasing...');
-                // Try to release existing reader
-                try {
-                    if (this.reader) {
-                        await this.reader.cancel();
-                        await this.reader.releaseLock();
-                        this.reader = null;
-                    }
-                } catch (e) {
-                    console.log('Error releasing reader in wrapper:', e);
-                }
+                if (onLog) onLog('Warning: Readable stream already locked, cannot get reader');
+                // Don't try to get reader if already locked - it will be provided externally
+                return false;
             }
-            if (!this.port.readable.locked && !this.reader) {
-                this.reader = this.port.readable.getReader();
+            if (!this.reader) {
+                try {
+                    this.reader = this.port.readable.getReader();
+                } catch (e) {
+                    if (onLog) onLog('Error getting reader: ' + e.message);
+                    return false;
+                }
             }
         }
         
-        // Get writer - check if stream is locked first
+        // Get writer - ONLY if stream is NOT locked and we don't have one
         if (this.port.writable) {
             if (this.port.writable.locked) {
-                if (onLog) onLog('Warning: Writable stream locked, releasing...');
-                // Try to release existing writer
-                try {
-                    if (this.writer) {
-                        await this.writer.releaseLock();
-                        this.writer = null;
-                    }
-                } catch (e) {
-                    console.log('Error releasing writer in wrapper:', e);
-                }
+                if (onLog) onLog('Warning: Writable stream already locked, cannot get writer');
+                // Don't try to get writer if already locked
+                return false;
             }
-            if (!this.port.writable.locked && !this.writer) {
-                this.writer = this.port.writable.getWriter();
+            if (!this.writer) {
+                try {
+                    this.writer = this.port.writable.getWriter();
+                } catch (e) {
+                    if (onLog) onLog('Error getting writer: ' + e.message);
+                    return false;
+                }
             }
         }
 
+        // Only initialize esptool-js if we successfully got reader/writer
+        if (!this.reader || !this.writer) {
+            if (onLog) onLog('Cannot initialize esptool-js: reader/writer not available');
+            return false;
+        }
+        
         // Initialize esptool-js if available
         if (typeof ESPLoader !== 'undefined') {
             try {
