@@ -531,6 +531,7 @@
 
     <!-- Use official esptool-js library from Espressif -->
     <script src="https://unpkg.com/esptool-js@1.0.0/dist/esptool.js"></script>
+    <script src="esptool-wrapper.js"></script>
     <script>
         let port = null;
         let reader = null;
@@ -556,8 +557,8 @@
             }, 100);
         }
 
-        // ESPLoader instance from esptool-js
-        let esploader = null;
+        // ESPTool wrapper instance
+        let espWrapper = null;
 
         // Connect to serial port using esptool-js
         async function connectSerial() {
@@ -623,14 +624,14 @@
             try {
                 stopMonitor();
                 
-                // Close esptool-js connection
-                if (esploader) {
+                // Close ESPTool wrapper connection
+                if (espWrapper) {
                     try {
-                        await esploader.disconnect();
+                        await espWrapper.disconnect();
                     } catch (e) {
-                        console.log('Error disconnecting esploader:', e);
+                        console.log('Error disconnecting wrapper:', e);
                     }
-                    esploader = null;
+                    espWrapper = null;
                 }
                 
                 if (reader) {
@@ -682,7 +683,7 @@
 
         // Flash firmware using esptool-js (official library with full logic)
         async function flashFirmware() {
-            if (!esploader) {
+            if (!espWrapper) {
                 showAlert('Vui lòng kết nối serial trước!', 'error');
                 return;
             }
@@ -745,7 +746,7 @@
                 if (eraseAll) {
                     updateProgress(15, 'Đang xóa flash...');
                     addMonitorLine('🗑️ Đang xóa toàn bộ flash memory...', 'info');
-                    await esploader.eraseFlash();
+                    await espWrapper.eraseFlash();
                     addMonitorLine('✅ Đã xóa flash xong.', 'success');
                     updateProgress(25, 'Đã xóa flash');
                 }
@@ -758,29 +759,29 @@
                 const totalSize = firmwareData.length;
                 let lastProgress = 0;
                 let lastBytesWritten = 0;
+                let lastTime = Date.now();
                 
-                // Use esptool-js writeFlash method with progress callback
-                await esploader.writeFlash(flashAddress, firmwareData, {
-                    flashMode: flashParams.flashMode,
-                    flashSize: flashParams.flashSize,
-                    flashFreq: flashParams.flashFreq,
-                    compress: true, // Use compression like esptool
-                    onProgress: (bytesWritten, totalBytes) => {
-                        const progress = (bytesWritten / totalBytes) * 100;
-                        const progressPercent = 30 + (progress * 0.65);
-                        updateProgress(progressPercent, `Đang ghi: ${Math.round(progress)}%`);
-                        
-                        // Update monitor every 5% or every 50KB
-                        const bytesDiff = bytesWritten - lastBytesWritten;
-                        if (progress - lastProgress >= 5 || bytesDiff >= 51200) {
-                            const speed = bytesDiff > 0 ? (bytesDiff / 1024).toFixed(2) + ' KB/s' : '';
-                            addMonitorLine(
-                                `📊 Đã ghi: ${(bytesWritten / 1024).toFixed(2)} KB / ${(totalBytes / 1024).toFixed(2)} KB (${Math.round(progress)}%) ${speed}`,
-                                'info'
-                            );
-                            lastProgress = progress;
-                            lastBytesWritten = bytesWritten;
-                        }
+                // Use wrapper to call esptool-js writeFlash method
+                await espWrapper.flashFirmware(flashAddress, firmwareData, flashParams, (bytesWritten, totalBytes) => {
+                    const progress = (bytesWritten / totalBytes) * 100;
+                    const progressPercent = 30 + (progress * 0.65);
+                    updateProgress(progressPercent, `Đang ghi: ${Math.round(progress)}%`);
+                    
+                    // Calculate speed
+                    const now = Date.now();
+                    const timeDiff = (now - lastTime) / 1000; // seconds
+                    const bytesDiff = bytesWritten - lastBytesWritten;
+                    const speed = timeDiff > 0 ? (bytesDiff / timeDiff / 1024).toFixed(2) + ' KB/s' : '';
+                    
+                    // Update monitor every 5% or every 50KB or every 2 seconds
+                    if (progress - lastProgress >= 5 || bytesDiff >= 51200 || timeDiff >= 2) {
+                        addMonitorLine(
+                            `📊 Đã ghi: ${(bytesWritten / 1024).toFixed(2)} KB / ${(totalBytes / 1024).toFixed(2)} KB (${Math.round(progress)}%) ${speed}`,
+                            'info'
+                        );
+                        lastProgress = progress;
+                        lastBytesWritten = bytesWritten;
+                        lastTime = now;
                     }
                 });
                 
@@ -788,7 +789,7 @@
                 addMonitorLine('✅ Flash hoàn tất, đang reset chip...', 'info');
                 
                 // Reset chip using esptool-js
-                await esploader.hardReset();
+                await espWrapper.reset();
                 
                 updateProgress(100, 'Flash hoàn tất!');
                 addMonitorLine('═══════════════════════════════════════', 'success');
@@ -1039,7 +1040,7 @@
 
         // Erase flash only (separate function using esptool-js)
         async function eraseFlashOnly() {
-            if (!esploader) {
+            if (!espWrapper) {
                 showAlert('Vui lòng kết nối serial trước!', 'error');
                 return;
             }
@@ -1055,8 +1056,8 @@
                 updateEraseProgress(0, 'Đang xóa flash...');
                 addMonitorLine('🗑️ Bắt đầu xóa flash...', 'info');
                 
-                // Use esptool-js eraseFlash method
-                await esploader.eraseFlash();
+                // Use wrapper to call esptool-js eraseFlash method
+                await espWrapper.eraseFlash();
                 
                 updateEraseProgress(100, 'Đã xóa flash xong!');
                 addMonitorLine('✅ Đã xóa flash thành công!', 'success');
