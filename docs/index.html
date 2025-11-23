@@ -827,11 +827,23 @@
                     }
                     
                     // Update stats
-                    document.getElementById('monitorBytesReceived').textContent = monitorBytesReceived;
+                    const bytesReceivedEl = document.getElementById('monitorBytesReceived');
+                    if (bytesReceivedEl) {
+                        bytesReceivedEl.textContent = monitorBytesReceived;
+                    }
                 }
             } catch (error) {
-                if (error.name !== 'NetworkError') {
+                if (error.name !== 'NetworkError' && error.name !== 'AbortError') {
                     addMonitorLine('Lỗi đọc dữ liệu: ' + error.message, 'error');
+                }
+            } finally {
+                if (monitorReader) {
+                    try {
+                        await monitorReader.releaseLock();
+                    } catch (e) {
+                        // Ignore
+                    }
+                    monitorReader = null;
                 }
             }
         }
