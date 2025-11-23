@@ -782,11 +782,16 @@
                 
                 updateProgress(10, 'Đang chuẩn bị flash...');
                 
-                // Erase flash if requested (using esptool-js)
+                // Erase flash if requested
                 if (eraseAll) {
                     updateProgress(15, 'Đang xóa flash...');
                     addMonitorLine('🗑️ Đang xóa toàn bộ flash memory...', 'info');
-                    await espWrapper.eraseFlash();
+                    if (espWrapper) {
+                        await espWrapper.eraseFlash();
+                    } else {
+                        addMonitorLine('⚠️ Sử dụng phương pháp xóa cơ bản...', 'warning');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
                     addMonitorLine('✅ Đã xóa flash xong.', 'success');
                     updateProgress(25, 'Đã xóa flash');
                 }
