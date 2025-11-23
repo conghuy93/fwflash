@@ -757,17 +757,25 @@
             }
         }
 
-        // Flash firmware
+        // Flash firmware - Full implementation
         async function flashFirmware() {
             if (demoMode) {
                 // Demo mode - simulate flash
                 document.getElementById('flashProgress').classList.add('active');
                 document.getElementById('flashBtn').disabled = true;
                 
-                for (let i = 0; i <= 100; i += 10) {
+                const fileInput = document.getElementById('firmwareFile');
+                const fileName = fileInput.files.length > 0 ? fileInput.files[0].name : 'demo.bin';
+                addTerminalLine('═══════════════════════════════════════', 'info');
+                addTerminalLine('Demo Mode: Bắt đầu flash firmware...', 'info');
+                addTerminalLine(`File: ${fileName}`, 'info');
+                
+                for (let i = 0; i <= 100; i += 5) {
                     updateProgress(i, `Demo: Đang flash ${i}%`);
-                    addTerminalLine(`Demo: Đang flash ${i}%...`, 'info');
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                    if (i % 20 === 0) {
+                        addTerminalLine(`Demo: Đang flash ${i}%...`, 'info');
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 200));
                 }
                 
                 addTerminalLine('✅ Demo: Flash thành công!', 'success');
@@ -793,12 +801,132 @@
 
             const address = document.getElementById('address').value;
             if (!/^0x[0-9A-Fa-f]+$/.test(address)) {
-                showAlert('Địa chỉ flash không hợp lệ!', 'error');
+                showAlert('Địa chỉ flash không hợp lệ! Vui lòng nhập dạng hex (ví dụ: 0x1000)', 'error');
                 return;
             }
 
-            // ... (rest of flash logic from original file)
-            showAlert('Flash chức năng đang được tích hợp...', 'info');
+            const file = fileInput.files[0];
+            const flashMode = document.getElementById('flashMode').value;
+            const flashSize = document.getElementById('flashSize').value;
+            const flashFreq = document.getElementById('flashFreq').value;
+            const eraseAll = document.getElementById('eraseAll').checked;
+
+            try {
+                document.getElementById('flashProgress').classList.add('active');
+                document.getElementById('flashBtn').disabled = true;
+                
+                updateProgress(0, 'Đang đọc file firmware...');
+                addTerminalLine('═══════════════════════════════════════', 'info');
+                addTerminalLine('Bắt đầu quá trình flash firmware...', 'info');
+                
+                const arrayBuffer = await file.arrayBuffer();
+                const firmwareData = new Uint8Array(arrayBuffer);
+                
+                updateProgress(5, 'Đã đọc file firmware');
+                addTerminalLine(`📄 File: ${file.name}`, 'info');
+                addTerminalLine(`📦 Kích thước: ${(firmwareData.length / 1024).toFixed(2)} KB`, 'info');
+                addTerminalLine(`📍 Địa chỉ: ${address}`, 'info');
+                addTerminalLine(`⚙️ Mode: ${flashMode}, Size: ${flashSize}, Freq: ${flashFreq}`, 'info');
+                
+                // Convert flash parameters
+                const flashModeMap = { 'qio': 0, 'qout': 1, 'dio': 2, 'dout': 3 };
+                const flashSizeMap = {
+                    '256KB': 0x12, '512KB': 0x13, '1MB': 0x14, '2MB': 0x15,
+                    '4MB': 0x16, '8MB': 0x17, '16MB': 0x18, '32MB': 0x19
+                };
+                const flashFreqMap = {
+                    '80m': 0xf, '60m': 0xe, '48m': 0xd, '40m': 0xc,
+                    '30m': 0xb, '26m': 0xa, '24m': 0x9, '20m': 0x8, '16m': 0x7
+                };
+                
+                const flashParams = {
+                    flashMode: flashModeMap[flashMode] || 2,
+                    flashSize: flashSizeMap[flashSize] || 0x16,
+                    flashFreq: flashFreqMap[flashFreq] || 0xc
+                };
+                
+                updateProgress(10, 'Đang chuẩn bị flash...');
+                
+                // Erase flash if requested
+                if (eraseAll) {
+                    updateProgress(15, 'Đang xóa flash...');
+                    addTerminalLine('🗑️ Đang xóa toàn bộ flash memory...', 'info');
+                    if (espWrapper) {
+                        await espWrapper.eraseFlash();
+                    } else {
+                        addTerminalLine('⚠️ Sử dụng phương pháp xóa cơ bản...', 'warning');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                    addTerminalLine('✅ Đã xóa flash xong.', 'success');
+                    updateProgress(25, 'Đã xóa flash');
+                }
+                
+                // Write flash
+                updateProgress(30, 'Đang flash firmware...');
+                addTerminalLine(`📤 Đang ghi firmware vào địa chỉ ${address}...`, 'info');
+                
+                const flashAddress = parseInt(address, 16);
+                const totalSize = firmwareData.length;
+                let lastProgress = 0;
+                let lastBytesWritten = 0;
+                let lastTime = Date.now();
+                
+                if (espWrapper) {
+                    await espWrapper.flashFirmware(flashAddress, firmwareData, flashParams, (bytesWritten, totalBytes) => {
+                        const progress = (bytesWritten / totalBytes) * 100;
+                        const progressPercent = 30 + (progress * 0.65);
+                        updateProgress(progressPercent, `Đang ghi: ${Math.round(progress)}%`);
+                        
+                        const now = Date.now();
+                        const timeDiff = (now - lastTime) / 1000;
+                        const bytesDiff = bytesWritten - lastBytesWritten;
+                        const speed = timeDiff > 0 ? (bytesDiff / timeDiff / 1024).toFixed(2) + ' KB/s' : '';
+                        
+                        if (progress - lastProgress >= 5 || bytesDiff >= 51200 || timeDiff >= 2) {
+                            addTerminalLine(
+                                `📊 Đã ghi: ${(bytesWritten / 1024).toFixed(2)} KB / ${(totalBytes / 1024).toFixed(2)} KB (${Math.round(progress)}%) ${speed}`,
+                                'info'
+                            );
+                            lastProgress = progress;
+                            lastBytesWritten = bytesWritten;
+                            lastTime = now;
+                        }
+                    });
+                } else {
+                    addTerminalLine('❌ Lỗi: esptool-js không khả dụng. Vui lòng tải lại trang.', 'error');
+                    throw new Error('esptool-js không khả dụng. Vui lòng tải lại trang.');
+                }
+                
+                updateProgress(95, 'Đang hoàn tất...');
+                addTerminalLine('✅ Flash hoàn tất, đang reset chip...', 'info');
+                
+                // Reset chip
+                if (espWrapper) {
+                    await espWrapper.reset();
+                } else {
+                    await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+                }
+                
+                updateProgress(100, 'Flash hoàn tất!');
+                addTerminalLine('═══════════════════════════════════════', 'success');
+                addTerminalLine('🎉 Flash firmware thành công!', 'success');
+                addTerminalLine('ESP32 đã được reset và đang chạy firmware mới.', 'info');
+                showAlert('Flash firmware thành công!', 'success');
+                
+                setTimeout(() => {
+                    document.getElementById('flashProgress').classList.remove('active');
+                    document.getElementById('flashBtn').disabled = false;
+                }, 3000);
+                
+            } catch (error) {
+                addTerminalLine('═══════════════════════════════════════', 'error');
+                addTerminalLine('❌ Lỗi: ' + error.message, 'error');
+                showAlert('Lỗi khi flash: ' + error.message, 'error');
+                document.getElementById('flashProgress').classList.remove('active');
+                document.getElementById('flashBtn').disabled = false;
+            }
         }
 
         // Terminal functions
@@ -898,13 +1026,63 @@
 
         async function eraseFlashOnly() {
             if (demoMode) {
+                document.getElementById('eraseProgress').classList.add('active');
+                document.getElementById('eraseBtn').disabled = true;
                 addTerminalLine('Demo: Đang xóa flash...', 'info');
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                for (let i = 0; i <= 100; i += 10) {
+                    document.getElementById('eraseProgressFill').style.width = i + '%';
+                    document.getElementById('eraseProgressFill').textContent = i + '%';
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                }
                 addTerminalLine('✅ Demo: Đã xóa flash', 'success');
                 showAlert('Demo: Đã xóa flash', 'success');
+                setTimeout(() => {
+                    document.getElementById('eraseProgress').classList.remove('active');
+                    document.getElementById('eraseBtn').disabled = false;
+                }, 2000);
                 return;
             }
-            // ... (erase logic)
+
+            if (!port || !writer) {
+                showAlert('Vui lòng kết nối serial trước!', 'error');
+                return;
+            }
+
+            if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ flash memory? Thao tác này không thể hoàn tác!')) {
+                return;
+            }
+
+            try {
+                document.getElementById('eraseProgress').classList.add('active');
+                document.getElementById('eraseBtn').disabled = true;
+                
+                document.getElementById('eraseProgressFill').style.width = '0%';
+                document.getElementById('eraseProgressFill').textContent = '0%';
+                addTerminalLine('🗑️ Bắt đầu xóa flash...', 'info');
+                
+                if (espWrapper) {
+                    await espWrapper.eraseFlash();
+                } else {
+                    addTerminalLine('❌ Lỗi: esptool-js không khả dụng', 'error');
+                    throw new Error('esptool-js không khả dụng');
+                }
+                
+                document.getElementById('eraseProgressFill').style.width = '100%';
+                document.getElementById('eraseProgressFill').textContent = '100%';
+                addTerminalLine('✅ Đã xóa flash thành công!', 'success');
+                showAlert('Đã xóa flash thành công!', 'success');
+                
+                setTimeout(() => {
+                    document.getElementById('eraseProgress').classList.remove('active');
+                    document.getElementById('eraseBtn').disabled = false;
+                }, 3000);
+                
+            } catch (error) {
+                addTerminalLine('❌ Lỗi khi xóa flash: ' + error.message, 'error');
+                showAlert('Lỗi khi xóa flash: ' + error.message, 'error');
+                document.getElementById('eraseProgress').classList.remove('active');
+                document.getElementById('eraseBtn').disabled = false;
+            }
         }
 
         // Check browser support
