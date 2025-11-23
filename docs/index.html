@@ -710,7 +710,7 @@
         }
 
         // Write flash
-        async function writeFlash(address, data) {
+        async function writeFlash(address, data, progressCallback) {
             const chunkSize = 1024;
             const totalChunks = Math.ceil(data.length / chunkSize);
             
@@ -723,8 +723,12 @@
                 // This is a placeholder - you'd need to implement the full esptool protocol
                 await writer.write(chunk);
                 
-                const progress = 30 + (i / totalChunks) * 60;
-                updateProgress(progress, `Đang ghi: ${Math.round(progress)}%`);
+                const progress = (i / totalChunks) * 100;
+                if (progressCallback) {
+                    progressCallback(progress, `Đang ghi: ${Math.round(progress)}%`);
+                } else {
+                    updateProgress(30 + (progress * 0.6), `Đang ghi: ${Math.round(progress)}%`);
+                }
             }
         }
 
@@ -742,9 +746,161 @@
             document.getElementById('progressMessage').textContent = message;
         }
 
+        // Serial Monitor Functions
+        let monitorReading = false;
+        let monitorPaused = false;
+        let monitorLineCount = 0;
+        let monitorBytesReceived = 0;
+        let monitorBytesSent = 0;
+        let monitorReader = null;
+
+        async function startMonitor() {
+            if (!port || !port.readable) return;
+            
+            monitorReading = true;
+            monitorPaused = false;
+            monitorReader = port.readable.getReader();
+            const decoder = new TextDecoder();
+            
+            addMonitorLine('Bắt đầu đọc dữ liệu từ ESP32...', 'info');
+            
+            try {
+                while (monitorReading) {
+                    if (monitorPaused) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        continue;
+                    }
+                    
+                    const { value, done } = await monitorReader.read();
+                    if (done) break;
+                    
+                    monitorBytesReceived += value.length;
+                    const text = decoder.decode(value, { stream: true });
+                    
+                    // Split by lines
+                    const lines = text.split('\n');
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        if (lines[i].trim()) {
+                            addMonitorLine(lines[i], 'normal');
+                        }
+                    }
+                    
+                    // Update stats
+                    document.getElementById('monitorBytesReceived').textContent = monitorBytesReceived;
+                }
+            } catch (error) {
+                if (error.name !== 'NetworkError') {
+                    addMonitorLine('Lỗi đọc dữ liệu: ' + error.message, 'error');
+                }
+            }
+        }
+
+        function stopMonitor() {
+            monitorReading = false;
+            if (monitorReader) {
+                monitorReader.cancel();
+                monitorReader.releaseLock();
+                monitorReader = null;
+            }
+        }
+
+        function toggleMonitor() {
+            monitorPaused = !monitorPaused;
+            const btn = document.getElementById('monitorToggleBtn');
+            if (btn) {
+                btn.textContent = monitorPaused ? '▶️ Tiếp tục' : '⏸️ Tạm dừng';
+            }
+            addMonitorLine(monitorPaused ? 'Monitor đã tạm dừng' : 'Monitor đã tiếp tục', 'info');
+        }
+
+        function addMonitorLine(text, type = 'normal') {
+            if (!text || !text.trim()) return;
+            
+            const container = document.getElementById('monitorContainer');
+            if (!container) return; // Monitor section might not exist
+            
+            const line = document.createElement('div');
+            line.className = 'monitor-line ' + type;
+            
+            // Escape HTML
+            const escapedText = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            line.textContent = escapedText;
+            container.appendChild(line);
+            
+            // Auto scroll to bottom
+            container.scrollTop = container.scrollHeight;
+            
+            // Update line count
+            monitorLineCount++;
+            const lineCountEl = document.getElementById('monitorLineCount');
+            if (lineCountEl) {
+                lineCountEl.textContent = monitorLineCount;
+            }
+            
+            // Limit lines to prevent memory issues
+            if (container.children.length > 1000) {
+                container.removeChild(container.firstChild);
+            }
+        }
+
+        function clearMonitor() {
+            const container = document.getElementById('monitorContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            monitorLineCount = 0;
+            const lineCountEl = document.getElementById('monitorLineCount');
+            if (lineCountEl) {
+                lineCountEl.textContent = '0';
+            }
+            addMonitorLine('Monitor đã được xóa.', 'info');
+        }
+
+        async function sendMonitorCommand() {
+            const input = document.getElementById('monitorInput');
+            if (!input) return;
+            
+            const command = input.value.trim();
+            
+            if (!command) return;
+            if (!writer) {
+                showAlert('Chưa kết nối serial!', 'error');
+                return;
+            }
+            
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(command + '\n');
+                await writer.write(data);
+                
+                monitorBytesSent += data.length;
+                const bytesSentEl = document.getElementById('monitorBytesSent');
+                if (bytesSentEl) {
+                    bytesSentEl.textContent = monitorBytesSent;
+                }
+                
+                addMonitorLine('> ' + command, 'info');
+                input.value = '';
+            } catch (error) {
+                addMonitorLine('Lỗi gửi lệnh: ' + error.message, 'error');
+            }
+        }
+
+        function handleMonitorKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMonitorCommand();
+            }
+        }
+
         // Show alert
         function showAlert(message, type) {
             const alert = document.getElementById('alert');
+            if (!alert) return;
+            
             alert.textContent = message;
             alert.className = `alert alert-${type} active`;
             
