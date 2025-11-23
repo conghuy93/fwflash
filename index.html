@@ -564,40 +564,66 @@
         async function connectSerial() {
             try {
                 if (!navigator.serial) {
-                    showAlert('Web Serial API không được hỗ trợ trên trình duyệt này!', 'error');
+                    showAlert('Web Serial API không được hỗ trợ trên trình duyệt này! Vui lòng dùng Chrome, Edge hoặc Opera.', 'error');
                     return;
                 }
 
-                // Check if esptool-js is available
-                if (typeof ESPLoader === 'undefined') {
-                    showAlert('esptool-js chưa được tải. Đang tải lại trang...', 'error');
-                    setTimeout(() => location.reload(), 2000);
-                    return;
-                }
-
+                // Request port (this will show browser's port selection dialog)
+                addMonitorLine('Đang yêu cầu chọn cổng serial...', 'info');
                 port = await navigator.serial.requestPort();
+                
                 const baud = parseInt(document.getElementById('baud').value);
+                addMonitorLine(`Đang mở cổng với baud rate ${baud}...`, 'info');
                 
                 await port.open({ baudRate: baud });
                 
                 reader = port.readable.getReader();
                 writer = port.writable.getWriter();
 
-                // Initialize ESPLoader from esptool-js
-                addMonitorLine('Đang khởi tạo ESPLoader...', 'info');
-                esploader = new ESPLoader(port, baud, {
-                    trace: false,
-                    debug: false
-                });
-
-                // Connect to ESP32
-                addMonitorLine('Đang kết nối với ESP32...', 'info');
-                await esploader.connect();
-                
-                // Get chip info
-                const chipInfo = esploader.chip;
-                addMonitorLine(`Đã kết nối với ${chipInfo.CHIP_NAME}`, 'success');
-                addMonitorLine(`MAC: ${chipInfo.macAddress || 'N/A'}`, 'info');
+                // Try to use esptool-js if available, otherwise use direct serial
+                if (typeof ESPToolWrapper !== 'undefined') {
+                    addMonitorLine('Đang khởi tạo ESPTool wrapper...', 'info');
+                    espWrapper = new ESPToolWrapper(port, baud);
+                    
+                    const connected = await espWrapper.connect((message) => {
+                        addMonitorLine(message, 'info');
+                    });
+                    
+                    if (connected) {
+                        const chipInfo = espWrapper.getChipInfo();
+                        if (chipInfo) {
+                            addMonitorLine(`✅ Đã kết nối với ${chipInfo.name}`, 'success');
+                            if (chipInfo.mac) {
+                                addMonitorLine(`📱 MAC: ${chipInfo.mac}`, 'info');
+                            }
+                        }
+                    } else {
+                        addMonitorLine('⚠️ Kết nối cơ bản (esptool-js chưa sẵn sàng, dùng Web Serial trực tiếp)', 'warning');
+                        addMonitorLine('✅ Đã kết nối serial port', 'success');
+                    }
+                } else if (typeof ESPLoader !== 'undefined') {
+                    // Try direct ESPLoader if wrapper not available
+                    addMonitorLine('Đang khởi tạo ESPLoader...', 'info');
+                    try {
+                        // Try different ESPLoader API formats
+                        if (typeof ESPLoader === 'function') {
+                            espWrapper = new ESPLoader({
+                                port: port,
+                                baudRate: baud,
+                                logFunction: (msg) => addMonitorLine(msg, 'info')
+                            });
+                            await espWrapper.connect();
+                            addMonitorLine('✅ Đã kết nối với ESP32', 'success');
+                        }
+                    } catch (e) {
+                        addMonitorLine('⚠️ ESPLoader init failed, using direct serial: ' + e.message, 'warning');
+                        addMonitorLine('✅ Đã kết nối serial port', 'success');
+                    }
+                } else {
+                    // Fallback: direct serial connection
+                    addMonitorLine('⚠️ esptool-js không khả dụng, sử dụng Web Serial trực tiếp', 'warning');
+                    addMonitorLine('✅ Đã kết nối serial port', 'success');
+                }
 
                 updateSerialStatus(true);
                 document.getElementById('connectBtn').style.display = 'none';
@@ -608,13 +634,27 @@
                 // Start monitoring
                 startMonitor();
                 
-                showAlert('Đã kết nối thành công với ESP32!', 'success');
+                showAlert('Đã kết nối thành công!', 'success');
             } catch (error) {
-                addMonitorLine('Lỗi kết nối: ' + error.message, 'error');
+                console.error('Connection error:', error);
+                addMonitorLine('❌ Lỗi kết nối: ' + error.message, 'error');
+                
                 if (error.name === 'NotFoundError') {
                     showAlert('Không tìm thấy cổng serial. Vui lòng thử lại.', 'error');
+                } else if (error.name === 'SecurityError') {
+                    showAlert('Lỗi bảo mật: Vui lòng cho phép truy cập cổng serial.', 'error');
+                } else if (error.name === 'InvalidStateError') {
+                    showAlert('Cổng serial đang được sử dụng. Vui lòng đóng các ứng dụng khác.', 'error');
                 } else {
                     showAlert('Lỗi kết nối: ' + error.message, 'error');
+                }
+                
+                // Clean up on error
+                if (port) {
+                    try {
+                        await port.close();
+                    } catch (e) {}
+                    port = null;
                 }
             }
         }
@@ -683,7 +723,7 @@
 
         // Flash firmware using esptool-js (official library with full logic)
         async function flashFirmware() {
-            if (!espWrapper) {
+            if (!port || !writer) {
                 showAlert('Vui lòng kết nối serial trước!', 'error');
                 return;
             }
@@ -1040,7 +1080,7 @@
 
         // Erase flash only (separate function using esptool-js)
         async function eraseFlashOnly() {
-            if (!espWrapper) {
+            if (!port || !writer) {
                 showAlert('Vui lòng kết nối serial trước!', 'error');
                 return;
             }
@@ -1057,7 +1097,12 @@
                 addMonitorLine('🗑️ Bắt đầu xóa flash...', 'info');
                 
                 // Use wrapper to call esptool-js eraseFlash method
-                await espWrapper.eraseFlash();
+                if (espWrapper) {
+                    await espWrapper.eraseFlash();
+                } else {
+                    addMonitorLine('⚠️ esptool-js không khả dụng', 'error');
+                    throw new Error('esptool-js không khả dụng');
+                }
                 
                 updateEraseProgress(100, 'Đã xóa flash xong!');
                 addMonitorLine('✅ Đã xóa flash thành công!', 'success');
