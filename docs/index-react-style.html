@@ -641,11 +641,43 @@
                     }
                 }
                 
-                if (!reader && port.readable) {
-                    reader = port.readable.getReader();
+                // Get reader - check if stream is locked first
+                if (port.readable) {
+                    if (port.readable.locked) {
+                        addTerminalLine('⚠️ Readable stream đã bị lock, đang release...', 'warning');
+                        // Try to get existing reader and release it
+                        try {
+                            const existingReader = port.readable.getReader();
+                            await existingReader.cancel();
+                            await existingReader.releaseLock();
+                        } catch (e) {
+                            console.log('Error releasing existing reader:', e);
+                        }
+                    }
+                    if (!port.readable.locked) {
+                        reader = port.readable.getReader();
+                    } else {
+                        throw new Error('Không thể lấy reader: stream vẫn bị lock');
+                    }
                 }
-                if (!writer && port.writable) {
-                    writer = port.writable.getWriter();
+                
+                // Get writer - check if stream is locked first
+                if (port.writable) {
+                    if (port.writable.locked) {
+                        addTerminalLine('⚠️ Writable stream đã bị lock, đang release...', 'warning');
+                        // Try to release existing writer
+                        try {
+                            const existingWriter = port.writable.getWriter();
+                            await existingWriter.releaseLock();
+                        } catch (e) {
+                            console.log('Error releasing existing writer:', e);
+                        }
+                    }
+                    if (!port.writable.locked) {
+                        writer = port.writable.getWriter();
+                    } else {
+                        throw new Error('Không thể lấy writer: stream vẫn bị lock');
+                    }
                 }
 
                 // Try to use esptool-js
@@ -706,7 +738,7 @@
         // Disconnect serial port
         async function disconnectSerial() {
             try {
-                stopMonitor();
+                await stopMonitor();
                 
                 if (espWrapper) {
                     try {
@@ -956,8 +988,15 @@
             monitorReader = port.readable.getReader();
             
             try {
+                // Use monitorReader if available, otherwise use reader
+                const activeReader = monitorReader || reader;
+                if (!activeReader) {
+                    addTerminalLine('⚠️ Không có reader để monitor', 'warning');
+                    return;
+                }
+                
                 while (monitorReading) {
-                    const { value, done } = await monitorReader.read();
+                    const { value, done } = await activeReader.read();
                     if (done) break;
                     
                     const text = new TextDecoder().decode(value);
@@ -968,15 +1007,27 @@
                     addTerminalLine('Lỗi monitor: ' + error.message, 'error');
                 }
             } finally {
-                monitorReader.releaseLock();
-                monitorReader = null;
+                if (monitorReader) {
+                    try {
+                        await monitorReader.releaseLock();
+                    } catch (e) {
+                        console.log('Error releasing monitor reader:', e);
+                    }
+                    monitorReader = null;
+                }
             }
         }
 
-        function stopMonitor() {
+        async function stopMonitor() {
             monitorReading = false;
             if (monitorReader) {
-                monitorReader.cancel();
+                try {
+                    await monitorReader.cancel();
+                    await monitorReader.releaseLock();
+                } catch (e) {
+                    console.log('Error stopping monitor:', e);
+                }
+                monitorReader = null;
             }
         }
 
