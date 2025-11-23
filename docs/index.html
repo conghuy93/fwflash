@@ -505,6 +505,25 @@
                 </div>
             </div>
 
+            <!-- Serial Monitor Section -->
+            <div class="section monitor-section">
+                <div class="section-title">📺 Serial Monitor</div>
+                <div class="monitor-stats">
+                    <span>📊 Lines: <span id="monitorLineCount">0</span></span>
+                    <span>📥 Received: <span id="monitorBytesReceived">0</span> bytes</span>
+                    <span>📤 Sent: <span id="monitorBytesSent">0</span> bytes</span>
+                </div>
+                <div class="monitor-controls">
+                    <input type="text" id="monitorInput" class="monitor-input" placeholder="Nhập lệnh và nhấn Enter để gửi..." onkeypress="handleMonitorKeyPress(event)">
+                    <button class="btn btn-primary btn-small" onclick="sendMonitorCommand()">📤 Gửi</button>
+                    <button class="btn btn-primary btn-small" onclick="clearMonitor()">🗑️ Xóa</button>
+                    <button class="btn btn-primary btn-small" onclick="toggleMonitor()" id="monitorToggleBtn">⏸️ Tạm dừng</button>
+                </div>
+                <div id="monitorContainer" class="monitor-container">
+                    <div class="monitor-line info">Serial Monitor sẵn sàng. Kết nối ESP32 để bắt đầu...</div>
+                </div>
+            </div>
+
             <!-- Alert Messages -->
             <div id="alert" class="alert"></div>
         </div>
@@ -523,9 +542,17 @@
         let monitorReader = null;
 
         // Check browser support
-        if (!navigator.serial) {
-            document.getElementById('browserWarning').style.display = 'block';
-            showAlert('Trình duyệt của bạn không hỗ trợ Web Serial API. Vui lòng sử dụng Chrome, Edge hoặc Opera.', 'error');
+        if (typeof navigator !== 'undefined' && !navigator.serial) {
+            const warningEl = document.getElementById('browserWarning');
+            if (warningEl) {
+                warningEl.style.display = 'block';
+            }
+            // showAlert will be defined later, so we'll call it after DOM is ready
+            setTimeout(() => {
+                if (typeof showAlert === 'function') {
+                    showAlert('Trình duyệt của bạn không hỗ trợ Web Serial API. Vui lòng sử dụng Chrome, Edge hoặc Opera.', 'error');
+                }
+            }, 100);
         }
 
         // Connect to serial port
@@ -755,11 +782,26 @@
         let monitorReader = null;
 
         async function startMonitor() {
-            if (!port || !port.readable) return;
+            if (!port || !port.readable) {
+                console.log('Cannot start monitor: port not available');
+                return;
+            }
+            
+            // Stop existing monitor if running
+            if (monitorReader) {
+                try {
+                    await monitorReader.cancel();
+                    await monitorReader.releaseLock();
+                } catch (e) {
+                    console.log('Error stopping existing monitor:', e);
+                }
+            }
             
             monitorReading = true;
             monitorPaused = false;
-            monitorReader = port.readable.getReader();
+            
+            try {
+                monitorReader = port.readable.getReader();
             const decoder = new TextDecoder();
             
             addMonitorLine('Bắt đầu đọc dữ liệu từ ESP32...', 'info');
