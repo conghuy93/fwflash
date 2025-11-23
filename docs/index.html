@@ -529,8 +529,8 @@
         </div>
     </div>
 
-    <!-- Use official esptool-js library -->
-    <script src="https://unpkg.com/esptool-js@1.0.0/lib/index.js"></script>
+    <!-- Use official esptool-js library from Espressif -->
+    <script src="https://unpkg.com/esptool-js@1.0.0/dist/esptool.js"></script>
     <script>
         let port = null;
         let reader = null;
@@ -556,11 +556,21 @@
             }, 100);
         }
 
-        // Connect to serial port
+        // ESPLoader instance from esptool-js
+        let esploader = null;
+
+        // Connect to serial port using esptool-js
         async function connectSerial() {
             try {
                 if (!navigator.serial) {
                     showAlert('Web Serial API không được hỗ trợ trên trình duyệt này!', 'error');
+                    return;
+                }
+
+                // Check if esptool-js is available
+                if (typeof ESPLoader === 'undefined') {
+                    showAlert('esptool-js chưa được tải. Đang tải lại trang...', 'error');
+                    setTimeout(() => location.reload(), 2000);
                     return;
                 }
 
@@ -572,16 +582,34 @@
                 reader = port.readable.getReader();
                 writer = port.writable.getWriter();
 
+                // Initialize ESPLoader from esptool-js
+                addMonitorLine('Đang khởi tạo ESPLoader...', 'info');
+                esploader = new ESPLoader(port, baud, {
+                    trace: false,
+                    debug: false
+                });
+
+                // Connect to ESP32
+                addMonitorLine('Đang kết nối với ESP32...', 'info');
+                await esploader.connect();
+                
+                // Get chip info
+                const chipInfo = esploader.chip;
+                addMonitorLine(`Đã kết nối với ${chipInfo.CHIP_NAME}`, 'success');
+                addMonitorLine(`MAC: ${chipInfo.macAddress || 'N/A'}`, 'info');
+
                 updateSerialStatus(true);
                 document.getElementById('connectBtn').style.display = 'none';
                 document.getElementById('disconnectBtn').style.display = 'inline-block';
                 document.getElementById('flashBtn').disabled = false;
+                document.getElementById('eraseBtn').disabled = false;
                 
                 // Start monitoring
                 startMonitor();
                 
                 showAlert('Đã kết nối thành công với ESP32!', 'success');
             } catch (error) {
+                addMonitorLine('Lỗi kết nối: ' + error.message, 'error');
                 if (error.name === 'NotFoundError') {
                     showAlert('Không tìm thấy cổng serial. Vui lòng thử lại.', 'error');
                 } else {
@@ -594,6 +622,16 @@
         async function disconnectSerial() {
             try {
                 stopMonitor();
+                
+                // Close esptool-js connection
+                if (esploader) {
+                    try {
+                        await esploader.disconnect();
+                    } catch (e) {
+                        console.log('Error disconnecting esploader:', e);
+                    }
+                    esploader = null;
+                }
                 
                 if (reader) {
                     await reader.cancel();
