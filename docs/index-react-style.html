@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Web Flasher - Modern UI</title>
+    <!-- Lucide Icons via CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5568d3;
+            --secondary: #764ba2;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --bg-hover: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .app-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .card-header svg {
+            width: 24px;
+            height: 24px;
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .status-connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .status-disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+
+        .status-demo {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 32px;
+            background: var(--bg);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .terminal {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 16px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .terminal-line {
+            color: #d4d4d4;
+            margin-bottom: 4px;
+            word-wrap: break-word;
+        }
+
+        .terminal-line.error { color: #f48771; }
+        .terminal-line.success { color: #4ec9b0; }
+        .terminal-line.info { color: #569cd6; }
+        .terminal-line.warning { color: #dcdcaa; }
+
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .alert.active {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+        .demo-mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border);
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>
+                <i data-lucide="zap"></i>
+                ESP32 Web Flasher
+            </h1>
+            <p>Flash ESP32 trực tiếp từ trình duyệt - Không cần cài đặt!</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <!-- Demo Mode Toggle -->
+        <div class="demo-mode-toggle">
+            <label class="switch">
+                <input type="checkbox" id="demoMode" onchange="toggleDemoMode()">
+                <span class="slider"></span>
+            </label>
+            <label for="demoMode" style="margin: 0; cursor: pointer;">
+                <strong>Chế độ Demo</strong> (Giả lập - Test UI khi không có quyền Serial)
+            </label>
+        </div>
+
+        <div class="grid">
+            <!-- Connection Card -->
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="usb"></i>
+                    <span>Kết nối Serial</span>
+                </div>
+                <div id="connectionStatus" class="status-badge status-disconnected">
+                    <i data-lucide="alert-circle"></i>
+                    <span>Chưa kết nối</span>
+                </div>
+                <div class="form-group" style="margin-top: 16px;">
+                    <label for="baud">Baud Rate:</label>
+                    <select id="baud">
+                        <option value="115200" selected>115200</option>
+                        <option value="230400">230400</option>
+                        <option value="460800">460800</option>
+                        <option value="921600">921600</option>
+                    </select>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="connectSerial()" id="connectBtn">
+                        <i data-lucide="usb"></i>
+                        Kết nối
+                    </button>
+                    <button class="btn btn-danger" onclick="disconnectSerial()" id="disconnectBtn" style="display: none;">
+                        <i data-lucide="x"></i>
+                        Ngắt kết nối
+                    </button>
+                </div>
+            </div>
+
+            <!-- Flash Card -->
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="file-code"></i>
+                    <span>Flash Firmware</span>
+                </div>
+                <div class="form-group">
+                    <label for="firmwareFile">File firmware (.bin):</label>
+                    <input type="file" id="firmwareFile" accept=".bin" onchange="onFileSelect()">
+                </div>
+                <div id="fileName" style="margin-bottom: 16px; color: var(--text-muted);"></div>
+                <div class="form-group">
+                    <label for="address">Địa chỉ Flash (hex):</label>
+                    <input type="text" id="address" value="0x1000" placeholder="0x1000">
+                </div>
+                <div class="form-group">
+                    <label for="flashMode">Flash Mode:</label>
+                    <select id="flashMode">
+                        <option value="qio">QIO</option>
+                        <option value="qout">QOUT</option>
+                        <option value="dio" selected>DIO</option>
+                        <option value="dout">DOUT</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="flashSize">Flash Size:</label>
+                    <select id="flashSize">
+                        <option value="256KB">256KB</option>
+                        <option value="512KB">512KB</option>
+                        <option value="1MB">1MB</option>
+                        <option value="2MB">2MB</option>
+                        <option value="4MB" selected>4MB</option>
+                        <option value="8MB">8MB</option>
+                        <option value="16MB">16MB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="flashFreq">Flash Frequency:</label>
+                    <select id="flashFreq">
+                        <option value="80m" selected>80 MHz</option>
+                        <option value="60m">60 MHz</option>
+                        <option value="48m">48 MHz</option>
+                        <option value="40m">40 MHz</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="eraseAll" style="width: auto; margin-right: 8px;">
+                        Xóa toàn bộ flash trước khi flash
+                    </label>
+                </div>
+                <button class="btn btn-primary" onclick="flashFirmware()" id="flashBtn" disabled style="width: 100%;">
+                    <i data-lucide="play"></i>
+                    Flash Firmware
+                </button>
+                <div id="flashProgress" class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill">0%</div>
+                    </div>
+                    <div id="progressMessage" style="margin-top: 12px; text-align: center; color: var(--text-muted);"></div>
+                </div>
+            </div>
+
+            <!-- Erase Card -->
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="trash-2"></i>
+                    <span>Xóa Flash</span>
+                </div>
+                <p style="color: var(--text-muted); margin-bottom: 16px;">
+                    Cảnh báo: Thao tác này sẽ xóa toàn bộ dữ liệu trong flash memory!
+                </p>
+                <button class="btn btn-danger" onclick="eraseFlashOnly()" id="eraseBtn" disabled style="width: 100%;">
+                    <i data-lucide="trash-2"></i>
+                    Xóa Flash
+                </button>
+                <div id="eraseProgress" class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="eraseProgressFill">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal/Monitor Card -->
+        <div class="card" style="margin-top: 24px;">
+            <div class="card-header">
+                <i data-lucide="terminal"></i>
+                <span>Serial Monitor</span>
+            </div>
+            <div class="terminal" id="terminalContainer"></div>
+            <div style="margin-top: 16px; display: flex; gap: 12px;">
+                <input type="text" class="monitor-input" id="monitorInput" placeholder="Nhập lệnh và nhấn Enter..." 
+                       onkeypress="handleMonitorKeyPress(event)" style="flex: 1;">
+                <button class="btn btn-primary" onclick="sendMonitorCommand()">
+                    <i data-lucide="send"></i>
+                    Gửi
+                </button>
+                <button class="btn" onclick="clearMonitor()" style="background: var(--bg-hover);">
+                    <i data-lucide="refresh-cw"></i>
+                    Xóa
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Use official esptool-js library from Espressif -->
+    <script src="https://unpkg.com/esptool-js@1.0.0/dist/esptool.js"></script>
+    <script src="esptool-wrapper.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Global variables
+        let port = null;
+        let reader = null;
+        let writer = null;
+        let espWrapper = null;
+        let demoMode = false;
+        let monitorReader = null;
+        let monitorReading = false;
+
+        // Demo mode toggle
+        function toggleDemoMode() {
+            demoMode = document.getElementById('demoMode').checked;
+            if (demoMode) {
+                showAlert('Chế độ Demo đã bật. UI sẽ hoạt động ở chế độ giả lập.', 'warning');
+                updateConnectionStatus('demo');
+            } else {
+                showAlert('Chế độ Demo đã tắt.', 'info');
+                updateConnectionStatus('disconnected');
+            }
+        }
+
+        // Update connection status badge
+        function updateConnectionStatus(status) {
+            const badge = document.getElementById('connectionStatus');
+            const icon = badge.querySelector('i');
+            const text = badge.querySelector('span');
+            
+            badge.className = 'status-badge';
+            if (status === 'connected') {
+                badge.classList.add('status-connected');
+                icon.setAttribute('data-lucide', 'check-circle');
+                text.textContent = 'Đã kết nối';
+            } else if (status === 'demo') {
+                badge.classList.add('status-demo');
+                icon.setAttribute('data-lucide', 'activity');
+                text.textContent = 'Demo Mode';
+            } else {
+                badge.classList.add('status-disconnected');
+                icon.setAttribute('data-lucide', 'alert-circle');
+                text.textContent = 'Chưa kết nối';
+            }
+            lucide.createIcons();
+        }
+
+        // Connect to serial port
+        async function connectSerial() {
+            if (demoMode) {
+                // Demo mode - simulate connection
+                updateConnectionStatus('demo');
+                document.getElementById('connectBtn').style.display = 'none';
+                document.getElementById('disconnectBtn').style.display = 'inline-block';
+                document.getElementById('flashBtn').disabled = false;
+                document.getElementById('eraseBtn').disabled = false;
+                addTerminalLine('🔌 Demo Mode: Kết nối giả lập', 'info');
+                showAlert('Đã kết nối (Demo Mode)', 'success');
+                return;
+            }
+
+            try {
+                if (!navigator.serial) {
+                    showAlert('Web Serial API không được hỗ trợ! Vui lòng dùng Chrome, Edge hoặc Opera.', 'error');
+                    return;
+                }
+
+                // Close existing connection
+                if (port) {
+                    try {
+                        if (reader) {
+                            await reader.cancel();
+                            await reader.releaseLock();
+                            reader = null;
+                        }
+                        if (writer) {
+                            await writer.releaseLock();
+                            writer = null;
+                        }
+                        if (port.readable || port.writable) {
+                            await port.close();
+                        }
+                    } catch (e) {
+                        console.log('Error closing existing port:', e);
+                    }
+                    port = null;
+                }
+
+                addTerminalLine('Đang yêu cầu chọn cổng serial...', 'info');
+                port = await navigator.serial.requestPort();
+                
+                const baud = parseInt(document.getElementById('baud').value);
+                addTerminalLine(`Đang mở cổng với baud rate ${baud}...`, 'info');
+                
+                try {
+                    await port.open({ baudRate: baud });
+                } catch (e) {
+                    if (e.message.includes('already open')) {
+                        addTerminalLine('Cổng đã mở, tiếp tục...', 'info');
+                    } else {
+                        throw e;
+                    }
+                }
+                
+                if (!reader && port.readable) {
+                    reader = port.readable.getReader();
+                }
+                if (!writer && port.writable) {
+                    writer = port.writable.getWriter();
+                }
+
+                // Try to use esptool-js
+                if (typeof ESPToolWrapper !== 'undefined') {
+                    addTerminalLine('Đang khởi tạo ESPTool wrapper...', 'info');
+                    espWrapper = new ESPToolWrapper(port, baud);
+                    
+                    const connected = await espWrapper.connect((message) => {
+                        addTerminalLine(message, 'info');
+                    });
+                    
+                    if (connected) {
+                        const chipInfo = espWrapper.getChipInfo();
+                        if (chipInfo) {
+                            addTerminalLine(`✅ Đã kết nối với ${chipInfo.name}`, 'success');
+                            if (chipInfo.mac) {
+                                addTerminalLine(`📱 MAC: ${chipInfo.mac}`, 'info');
+                            }
+                        }
+                    } else {
+                        addTerminalLine('⚠️ Kết nối cơ bản (esptool-js chưa sẵn sàng)', 'warning');
+                    }
+                } else {
+                    addTerminalLine('✅ Đã kết nối serial port', 'success');
+                }
+
+                updateConnectionStatus('connected');
+                document.getElementById('connectBtn').style.display = 'none';
+                document.getElementById('disconnectBtn').style.display = 'inline-block';
+                document.getElementById('flashBtn').disabled = false;
+                document.getElementById('eraseBtn').disabled = false;
+                
+                startMonitor();
+                showAlert('Đã kết nối thành công!', 'success');
+            } catch (error) {
+                console.error('Connection error:', error);
+                addTerminalLine('❌ Lỗi kết nối: ' + error.message, 'error');
+                
+                if (error.name === 'NotFoundError') {
+                    showAlert('Không tìm thấy cổng serial. Vui lòng thử lại.', 'error');
+                } else if (error.name === 'SecurityError') {
+                    showAlert('Lỗi bảo mật: Vui lòng cho phép truy cập cổng serial.', 'error');
+                } else if (error.name === 'InvalidStateError') {
+                    showAlert('Cổng serial đang được sử dụng. Vui lòng đóng các ứng dụng khác.', 'error');
+                } else {
+                    showAlert('Lỗi kết nối: ' + error.message, 'error');
+                }
+                
+                if (port) {
+                    try {
+                        await port.close();
+                    } catch (e) {}
+                    port = null;
+                }
+            }
+        }
+
+        // Disconnect serial port
+        async function disconnectSerial() {
+            try {
+                stopMonitor();
+                
+                if (espWrapper) {
+                    try {
+                        await espWrapper.disconnect();
+                    } catch (e) {
+                        console.log('Error disconnecting wrapper:', e);
+                    }
+                    espWrapper = null;
+                }
+                
+                if (reader) {
+                    try {
+                        await reader.cancel();
+                        await reader.releaseLock();
+                    } catch (e) {}
+                    reader = null;
+                }
+                if (writer) {
+                    try {
+                        await writer.releaseLock();
+                    } catch (e) {}
+                    writer = null;
+                }
+                if (port) {
+                    try {
+                        if (port.readable || port.writable) {
+                            await port.close();
+                        }
+                    } catch (e) {}
+                    port = null;
+                }
+                
+                updateConnectionStatus('disconnected');
+                document.getElementById('connectBtn').style.display = 'inline-block';
+                document.getElementById('disconnectBtn').style.display = 'none';
+                document.getElementById('flashBtn').disabled = true;
+                document.getElementById('eraseBtn').disabled = true;
+                
+                addTerminalLine('Đã ngắt kết nối.', 'info');
+                showAlert('Đã ngắt kết nối.', 'success');
+            } catch (error) {
+                console.error('Disconnect error:', error);
+                showAlert('Lỗi khi ngắt kết nối: ' + error.message, 'error');
+                port = null;
+                reader = null;
+                writer = null;
+                espWrapper = null;
+            }
+        }
+
+        // Flash firmware
+        async function flashFirmware() {
+            if (demoMode) {
+                // Demo mode - simulate flash
+                document.getElementById('flashProgress').classList.add('active');
+                document.getElementById('flashBtn').disabled = true;
+                
+                for (let i = 0; i <= 100; i += 10) {
+                    updateProgress(i, `Demo: Đang flash ${i}%`);
+                    addTerminalLine(`Demo: Đang flash ${i}%...`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                }
+                
+                addTerminalLine('✅ Demo: Flash thành công!', 'success');
+                showAlert('Demo: Flash thành công!', 'success');
+                
+                setTimeout(() => {
+                    document.getElementById('flashProgress').classList.remove('active');
+                    document.getElementById('flashBtn').disabled = false;
+                }, 2000);
+                return;
+            }
+
+            if (!port || !writer) {
+                showAlert('Vui lòng kết nối serial trước!', 'error');
+                return;
+            }
+
+            const fileInput = document.getElementById('firmwareFile');
+            if (!fileInput.files.length) {
+                showAlert('Vui lòng chọn file firmware!', 'error');
+                return;
+            }
+
+            const address = document.getElementById('address').value;
+            if (!/^0x[0-9A-Fa-f]+$/.test(address)) {
+                showAlert('Địa chỉ flash không hợp lệ!', 'error');
+                return;
+            }
+
+            // ... (rest of flash logic from original file)
+            showAlert('Flash chức năng đang được tích hợp...', 'info');
+        }
+
+        // Terminal functions
+        function addTerminalLine(text, type = 'info') {
+            const container = document.getElementById('terminalContainer');
+            const line = document.createElement('div');
+            line.className = `terminal-line ${type}`;
+            line.textContent = text;
+            container.appendChild(line);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearMonitor() {
+            document.getElementById('terminalContainer').innerHTML = '';
+        }
+
+        async function startMonitor() {
+            if (!port || !port.readable || demoMode) return;
+            
+            if (monitorReader) {
+                try {
+                    await monitorReader.cancel();
+                } catch (e) {}
+            }
+            
+            monitorReading = true;
+            monitorReader = port.readable.getReader();
+            
+            try {
+                while (monitorReading) {
+                    const { value, done } = await monitorReader.read();
+                    if (done) break;
+                    
+                    const text = new TextDecoder().decode(value);
+                    addTerminalLine(text, 'info');
+                }
+            } catch (error) {
+                if (error.name !== 'NetworkError' && error.name !== 'AbortError') {
+                    addTerminalLine('Lỗi monitor: ' + error.message, 'error');
+                }
+            } finally {
+                monitorReader.releaseLock();
+                monitorReader = null;
+            }
+        }
+
+        function stopMonitor() {
+            monitorReading = false;
+            if (monitorReader) {
+                monitorReader.cancel();
+            }
+        }
+
+        function sendMonitorCommand() {
+            const input = document.getElementById('monitorInput');
+            const command = input.value.trim();
+            if (!command || !writer) return;
+            
+            const encoder = new TextEncoder();
+            writer.write(encoder.encode(command + '\n'));
+            addTerminalLine('> ' + command, 'info');
+            input.value = '';
+        }
+
+        function handleMonitorKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMonitorCommand();
+            }
+        }
+
+        function onFileSelect() {
+            const fileInput = document.getElementById('firmwareFile');
+            const fileName = document.getElementById('fileName');
+            if (fileInput.files.length > 0) {
+                fileName.textContent = '📄 ' + fileInput.files[0].name;
+            } else {
+                fileName.textContent = '';
+            }
+        }
+
+        function updateProgress(percent, message) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressFill').textContent = Math.round(percent) + '%';
+            document.getElementById('progressMessage').textContent = message;
+        }
+
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} active`;
+            alert.innerHTML = `<i data-lucide="${type === 'error' ? 'alert-circle' : type === 'success' ? 'check-circle' : 'info'}"></i><span>${message}</span>`;
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                alert.classList.remove('active');
+            }, 5000);
+        }
+
+        async function eraseFlashOnly() {
+            if (demoMode) {
+                addTerminalLine('Demo: Đang xóa flash...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                addTerminalLine('✅ Demo: Đã xóa flash', 'success');
+                showAlert('Demo: Đã xóa flash', 'success');
+                return;
+            }
+            // ... (erase logic)
+        }
+
+        // Check browser support
+        if (typeof navigator !== 'undefined' && !navigator.serial) {
+            showAlert('Trình duyệt không hỗ trợ Web Serial API. Vui lòng dùng Chrome, Edge hoặc Opera.', 'warning');
+        }
+    </script>
+</body>
+</html>
+
