@@ -14,10 +14,22 @@ class ESPToolWrapper {
     }
 
     async connect(onLog) {
-        // Open port
-        await this.port.open({ baudRate: this.baudRate });
-        this.reader = this.port.readable.getReader();
-        this.writer = this.port.writable.getWriter();
+        // Check if port is already open
+        if (this.port.readable && this.port.writable) {
+            // Port is already open, just get readers/writers
+            if (onLog) onLog('Port already open, reusing...');
+        } else {
+            // Open port only if not already open
+            await this.port.open({ baudRate: this.baudRate });
+        }
+        
+        // Get readers/writers (reuse if already have them)
+        if (!this.reader) {
+            this.reader = this.port.readable.getReader();
+        }
+        if (!this.writer) {
+            this.writer = this.port.writable.getWriter();
+        }
 
         // Initialize esptool-js if available
         if (typeof ESPLoader !== 'undefined') {
@@ -30,7 +42,7 @@ class ESPToolWrapper {
                 await this.esploader.connect();
                 return true;
             } catch (e) {
-                if (onLog) onLog('Warning: esptool-js init failed, using direct serial');
+                if (onLog) onLog('Warning: esptool-js init failed, using direct serial: ' + e.message);
                 return false;
             }
         }
@@ -38,23 +50,44 @@ class ESPToolWrapper {
     }
 
     async disconnect() {
+        // Disconnect esploader first
         if (this.esploader) {
             try {
                 await this.esploader.disconnect();
             } catch (e) {
-                // Ignore
+                console.log('Error disconnecting esploader:', e);
             }
+            this.esploader = null;
         }
+        
+        // Close reader
         if (this.reader) {
-            await this.reader.cancel();
-            await this.reader.releaseLock();
+            try {
+                await this.reader.cancel();
+            } catch (e) {
+                console.log('Error canceling reader:', e);
+            }
+            try {
+                await this.reader.releaseLock();
+            } catch (e) {
+                console.log('Error releasing reader:', e);
+            }
+            this.reader = null;
         }
+        
+        // Close writer
         if (this.writer) {
-            await this.writer.releaseLock();
+            try {
+                await this.writer.releaseLock();
+            } catch (e) {
+                console.log('Error releasing writer:', e);
+            }
+            this.writer = null;
         }
-        if (this.port) {
-            await this.port.close();
-        }
+        
+        // Close port (only if we opened it)
+        // Note: Don't close port here if it was opened outside wrapper
+        // The caller should handle port closing
     }
 
     async flashFirmware(address, data, options, onProgress) {
