@@ -802,11 +802,10 @@
             
             try {
                 monitorReader = port.readable.getReader();
-            const decoder = new TextDecoder();
-            
-            addMonitorLine('Bắt đầu đọc dữ liệu từ ESP32...', 'info');
-            
-            try {
+                const decoder = new TextDecoder();
+                
+                addMonitorLine('Bắt đầu đọc dữ liệu từ ESP32...', 'info');
+                
                 while (monitorReading) {
                     if (monitorPaused) {
                         await new Promise(resolve => setTimeout(resolve, 100));
