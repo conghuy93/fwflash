@@ -15,20 +15,50 @@ class ESPToolWrapper {
 
     async connect(onLog) {
         // Check if port is already open
-        if (this.port.readable && this.port.writable) {
-            // Port is already open, just get readers/writers
-            if (onLog) onLog('Port already open, reusing...');
-        } else {
+        if (!this.port.readable || !this.port.writable) {
             // Open port only if not already open
             await this.port.open({ baudRate: this.baudRate });
+        } else {
+            if (onLog) onLog('Port already open, reusing...');
         }
         
-        // Get readers/writers (reuse if already have them)
-        if (!this.reader) {
-            this.reader = this.port.readable.getReader();
+        // Get reader - check if stream is locked first
+        if (this.port.readable) {
+            if (this.port.readable.locked) {
+                if (onLog) onLog('Warning: Readable stream locked, releasing...');
+                // Try to release existing reader
+                try {
+                    if (this.reader) {
+                        await this.reader.cancel();
+                        await this.reader.releaseLock();
+                        this.reader = null;
+                    }
+                } catch (e) {
+                    console.log('Error releasing reader in wrapper:', e);
+                }
+            }
+            if (!this.port.readable.locked && !this.reader) {
+                this.reader = this.port.readable.getReader();
+            }
         }
-        if (!this.writer) {
-            this.writer = this.port.writable.getWriter();
+        
+        // Get writer - check if stream is locked first
+        if (this.port.writable) {
+            if (this.port.writable.locked) {
+                if (onLog) onLog('Warning: Writable stream locked, releasing...');
+                // Try to release existing writer
+                try {
+                    if (this.writer) {
+                        await this.writer.releaseLock();
+                        this.writer = null;
+                    }
+                } catch (e) {
+                    console.log('Error releasing writer in wrapper:', e);
+                }
+            }
+            if (!this.port.writable.locked && !this.writer) {
+                this.writer = this.port.writable.getWriter();
+            }
         }
 
         // Initialize esptool-js if available
