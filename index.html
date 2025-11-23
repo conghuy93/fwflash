@@ -707,7 +707,7 @@
             try {
                 stopMonitor();
                 
-                // Close ESPTool wrapper connection
+                // Close ESPTool wrapper connection first
                 if (espWrapper) {
                     try {
                         await espWrapper.disconnect();
@@ -717,30 +717,58 @@
                     espWrapper = null;
                 }
                 
+                // Close readers/writers
                 if (reader) {
-                    await reader.cancel();
-                    await reader.releaseLock();
+                    try {
+                        await reader.cancel();
+                    } catch (e) {
+                        console.log('Error canceling reader:', e);
+                    }
+                    try {
+                        await reader.releaseLock();
+                    } catch (e) {
+                        console.log('Error releasing reader:', e);
+                    }
+                    reader = null;
                 }
                 if (writer) {
-                    await writer.releaseLock();
-                }
-                if (port) {
-                    await port.close();
+                    try {
+                        await writer.releaseLock();
+                    } catch (e) {
+                        console.log('Error releasing writer:', e);
+                    }
+                    writer = null;
                 }
                 
-                port = null;
-                reader = null;
-                writer = null;
+                // Close port
+                if (port) {
+                    try {
+                        // Check if port is still open before closing
+                        if (port.readable || port.writable) {
+                            await port.close();
+                        }
+                    } catch (e) {
+                        console.log('Error closing port:', e);
+                    }
+                    port = null;
+                }
                 
                 updateSerialStatus(false);
                 document.getElementById('connectBtn').style.display = 'inline-block';
                 document.getElementById('disconnectBtn').style.display = 'none';
                 document.getElementById('flashBtn').disabled = true;
+                document.getElementById('eraseBtn').disabled = true;
                 
                 addMonitorLine('Đã ngắt kết nối.', 'info');
                 showAlert('Đã ngắt kết nối.', 'success');
             } catch (error) {
+                console.error('Disconnect error:', error);
                 showAlert('Lỗi khi ngắt kết nối: ' + error.message, 'error');
+                // Force cleanup even on error
+                port = null;
+                reader = null;
+                writer = null;
+                espWrapper = null;
             }
         }
 
