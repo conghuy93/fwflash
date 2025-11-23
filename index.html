@@ -680,9 +680,9 @@
             }
         }
 
-        // Flash firmware
+        // Flash firmware using esptool-js (official library with full logic)
         async function flashFirmware() {
-            if (!port || !writer) {
+            if (!esploader) {
                 showAlert('Vui lòng kết nối serial trước!', 'error');
                 return;
             }
@@ -710,41 +710,90 @@
                 document.getElementById('flashBtn').disabled = true;
                 
                 updateProgress(0, 'Đang đọc file firmware...');
+                addMonitorLine('═══════════════════════════════════════', 'info');
+                addMonitorLine('Bắt đầu quá trình flash firmware...', 'info');
                 
                 const arrayBuffer = await file.arrayBuffer();
                 const firmwareData = new Uint8Array(arrayBuffer);
                 
-                updateProgress(10, 'Đang kết nối với ESP32...');
-                addMonitorLine('Bắt đầu quá trình flash firmware...', 'info');
+                updateProgress(5, 'Đã đọc file firmware');
+                addMonitorLine(`📄 File: ${file.name}`, 'info');
+                addMonitorLine(`📦 Kích thước: ${(firmwareData.length / 1024).toFixed(2)} KB`, 'info');
+                addMonitorLine(`📍 Địa chỉ: ${address}`, 'info');
+                addMonitorLine(`⚙️ Mode: ${flashMode}, Size: ${flashSize}, Freq: ${flashFreq}`, 'info');
                 
-                // Reset ESP32 into bootloader mode
-                addMonitorLine('Đang reset ESP32 vào bootloader mode...', 'info');
-                await resetToBootloader();
+                // Convert flash parameters to esptool format
+                const flashModeMap = { 'qio': 0, 'qout': 1, 'dio': 2, 'dout': 3 };
+                const flashSizeMap = {
+                    '256KB': 0x12, '512KB': 0x13, '1MB': 0x14, '2MB': 0x15,
+                    '4MB': 0x16, '8MB': 0x17, '16MB': 0x18, '32MB': 0x19
+                };
+                const flashFreqMap = {
+                    '80m': 0xf, '60m': 0xe, '48m': 0xd, '40m': 0xc,
+                    '30m': 0xb, '26m': 0xa, '24m': 0x9, '20m': 0x8, '16m': 0x7
+                };
                 
-                updateProgress(20, 'Đang xóa flash...');
+                const flashParams = {
+                    flashMode: flashModeMap[flashMode] || 2,
+                    flashSize: flashSizeMap[flashSize] || 0x16,
+                    flashFreq: flashFreqMap[flashFreq] || 0xc
+                };
+                
+                updateProgress(10, 'Đang chuẩn bị flash...');
+                
+                // Erase flash if requested (using esptool-js)
                 if (eraseAll) {
-                    addMonitorLine('Đang xóa toàn bộ flash memory...', 'info');
-                    await eraseFlash();
-                    addMonitorLine('Đã xóa flash xong.', 'success');
+                    updateProgress(15, 'Đang xóa flash...');
+                    addMonitorLine('🗑️ Đang xóa toàn bộ flash memory...', 'info');
+                    await esploader.eraseFlash();
+                    addMonitorLine('✅ Đã xóa flash xong.', 'success');
+                    updateProgress(25, 'Đã xóa flash');
                 }
                 
+                // Write flash using esptool-js (official implementation)
                 updateProgress(30, 'Đang flash firmware...');
-                addMonitorLine(`Đang ghi firmware vào địa chỉ ${address}...`, 'info');
-                const totalSize = firmwareData.length;
-                let written = 0;
+                addMonitorLine(`📤 Đang ghi firmware vào địa chỉ ${address}...`, 'info');
                 
-                await writeFlash(parseInt(address, 16), firmwareData, (progress, msg) => {
-                    updateProgress(30 + (progress * 0.6), msg);
-                    written = Math.floor((progress / 100) * totalSize);
-                    addMonitorLine(`Đã ghi: ${(written / 1024).toFixed(2)} KB / ${(totalSize / 1024).toFixed(2)} KB`, 'info');
+                const flashAddress = parseInt(address, 16);
+                const totalSize = firmwareData.length;
+                let lastProgress = 0;
+                let lastBytesWritten = 0;
+                
+                // Use esptool-js writeFlash method with progress callback
+                await esploader.writeFlash(flashAddress, firmwareData, {
+                    flashMode: flashParams.flashMode,
+                    flashSize: flashParams.flashSize,
+                    flashFreq: flashParams.flashFreq,
+                    compress: true, // Use compression like esptool
+                    onProgress: (bytesWritten, totalBytes) => {
+                        const progress = (bytesWritten / totalBytes) * 100;
+                        const progressPercent = 30 + (progress * 0.65);
+                        updateProgress(progressPercent, `Đang ghi: ${Math.round(progress)}%`);
+                        
+                        // Update monitor every 5% or every 50KB
+                        const bytesDiff = bytesWritten - lastBytesWritten;
+                        if (progress - lastProgress >= 5 || bytesDiff >= 51200) {
+                            const speed = bytesDiff > 0 ? (bytesDiff / 1024).toFixed(2) + ' KB/s' : '';
+                            addMonitorLine(
+                                `📊 Đã ghi: ${(bytesWritten / 1024).toFixed(2)} KB / ${(totalBytes / 1024).toFixed(2)} KB (${Math.round(progress)}%) ${speed}`,
+                                'info'
+                            );
+                            lastProgress = progress;
+                            lastBytesWritten = bytesWritten;
+                        }
+                    }
                 });
                 
-                updateProgress(90, 'Đang reset chip...');
-                addMonitorLine('Đang reset ESP32...', 'info');
-                await resetChip();
+                updateProgress(95, 'Đang hoàn tất...');
+                addMonitorLine('✅ Flash hoàn tất, đang reset chip...', 'info');
+                
+                // Reset chip using esptool-js
+                await esploader.hardReset();
                 
                 updateProgress(100, 'Flash hoàn tất!');
-                addMonitorLine('✅ Flash firmware thành công!', 'success');
+                addMonitorLine('═══════════════════════════════════════', 'success');
+                addMonitorLine('🎉 Flash firmware thành công!', 'success');
+                addMonitorLine('ESP32 đã được reset và đang chạy firmware mới.', 'info');
                 showAlert('Flash firmware thành công!', 'success');
                 
                 setTimeout(() => {
@@ -753,6 +802,11 @@
                 }, 3000);
                 
             } catch (error) {
+                addMonitorLine('═══════════════════════════════════════', 'error');
+                addMonitorLine('❌ Lỗi: ' + error.message, 'error');
+                if (error.stack) {
+                    addMonitorLine('Chi tiết: ' + error.stack.split('\n')[0], 'error');
+                }
                 showAlert('Lỗi khi flash: ' + error.message, 'error');
                 document.getElementById('flashProgress').classList.remove('active');
                 document.getElementById('flashBtn').disabled = false;
@@ -981,6 +1035,52 @@
             if (event.key === 'Enter') {
                 sendMonitorCommand();
             }
+        }
+
+        // Erase flash only (separate function using esptool-js)
+        async function eraseFlashOnly() {
+            if (!esploader) {
+                showAlert('Vui lòng kết nối serial trước!', 'error');
+                return;
+            }
+
+            if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ flash memory? Thao tác này không thể hoàn tác!')) {
+                return;
+            }
+
+            try {
+                document.getElementById('eraseProgress').classList.add('active');
+                document.getElementById('eraseBtn').disabled = true;
+                
+                updateEraseProgress(0, 'Đang xóa flash...');
+                addMonitorLine('🗑️ Bắt đầu xóa flash...', 'info');
+                
+                // Use esptool-js eraseFlash method
+                await esploader.eraseFlash();
+                
+                updateEraseProgress(100, 'Đã xóa flash xong!');
+                addMonitorLine('✅ Đã xóa flash thành công!', 'success');
+                showAlert('Đã xóa flash thành công!', 'success');
+                
+                setTimeout(() => {
+                    document.getElementById('eraseProgress').classList.remove('active');
+                    document.getElementById('eraseBtn').disabled = false;
+                }, 3000);
+                
+            } catch (error) {
+                addMonitorLine('❌ Lỗi khi xóa flash: ' + error.message, 'error');
+                showAlert('Lỗi khi xóa flash: ' + error.message, 'error');
+                document.getElementById('eraseProgress').classList.remove('active');
+                document.getElementById('eraseBtn').disabled = false;
+            }
+        }
+
+        function updateEraseProgress(percent, message) {
+            const fill = document.getElementById('eraseProgressFill');
+            const msg = document.getElementById('eraseProgressMessage');
+            if (fill) fill.style.width = percent + '%';
+            if (fill) fill.textContent = Math.round(percent) + '%';
+            if (msg) msg.textContent = message;
         }
 
         // Show alert
