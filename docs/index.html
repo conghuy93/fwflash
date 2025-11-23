@@ -774,12 +774,7 @@
         }
 
         // Serial Monitor Functions
-        let monitorReading = false;
-        let monitorPaused = false;
-        let monitorLineCount = 0;
-        let monitorBytesReceived = 0;
-        let monitorBytesSent = 0;
-        let monitorReader = null;
+        // Variables already declared at top of script
 
         async function startMonitor() {
             if (!port || !port.readable) {
